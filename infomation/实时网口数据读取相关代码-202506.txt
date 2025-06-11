@@ -1,0 +1,273 @@
+
+	SOCKET    NetGps;
+
+	int lenR;
+	int lenD;
+	unsigned char curbuff[MAXRAWLEN];
+	unsigned char decBuff[2*MAXRAWLEN];	
+
+
+	if(CfgInfo.IsFileData==1)  //文件获取数据，打开文件
+	{
+		if( (Fobs = fopen( CfgInfo.ObsDatFile, "rb" )) == NULL )
+		{
+			printf( "Can not open the obs file %s\n", CfgInfo.ObsDatFile );
+			exit(0);
+		}
+	}	
+	else
+	{      //网络方式
+
+		if(OpenSocket(NetGps, CfgInfo.NetIP, CfgInfo.NetPort)==false)  {
+			printf( "The ip %s was not opened\n", CfgInfo.NetIP );
+			return 0;
+		}
+
+		if( (Fobs = fopen( CfgInfo.ObsDatFile, "wb" )) == NULL ) //记录网口接收的原始数据到观测文件中
+		{
+			printf( "The obs file %s was not opened\n", CfgInfo.ObsDatFile );
+			exit(0);
+		}
+	}
+
+//---------------------------------------------------------------------------------------------------//
+	//按照配置的读取方式，读取数据到缓存中
+	lenD = lenR = 0;
+	do{
+		if(CfgInfo.IsFileData==1)// 文件数据读取
+		{
+			ReadFlag = input_oem6f(&Epoch, GPSEph, BDSEph, Fobs);
+
+			if( ReadFlag ==-2 )   
+				break;
+			if( ReadFlag !=1 )    //只有为1，才继续后续操作
+				continue;
+		}	
+	
+		else       //网口读取数据
+		{
+			Sleep(980);
+			if ((lenR = recv(NetGps, (char*)curbuff, MAXRAWLEN, 0)) > 0)  //读取数据
+			{
+				printf("%5d ", lenR);
+				fwrite(curbuff, sizeof(unsigned char), lenR, Fobs);    //记录二进制数据流到文件中
+
+				if ((lenD + lenR) > 2 * MAXRAWLEN)
+					lenD = 0;
+				memcpy(decBuff + lenD, curbuff, lenR);                      //缓存拼接
+				lenD += lenR;
+
+				ReadFlag = input_oem6(decBuff, lenD, &Epoch, GPSEph, BDSEph);  //解码
+				if (ReadFlag != 1)
+				{
+					printf("Data acquisition and decode failed \n");
+					continue;
+				}
+			}
+
+		}
+
+
+
+
+
+
+
+/* input oem6 raw data from iostream ------------------------------------------
+* args   : unsigned char Buff[]       data buffer from iostream 
+           d                          size of Buff
+           EPOCHOBSDATA  *obs   O     raw obs data
+           GPSEPHREC     *geph  O     GPS broadcast ephemeris
+		   GPSEPHREC     *beph  O     BDS broadcast ephemeris
+
+* return : status(-2: end of file, -1...9: same as above)
+*-----------------------------------------------------------------------------*/
+int input_oem6(unsigned char Buff[], int& d, EPOCHOBSDATA* obs, GPSEPHREC geph[], GPSEPHREC beph[])
+{
+	int i,j, len, val;
+	double tow, pos[3];
+	
+	int msgType,week,msgID;
+	unsigned char TempBuff[MAXRAWLEN];
+	
+	i   = 0;
+	val = 0;
+	
+	while(1)
+	{
+		for (;i<d-2;i++) //同步
+		{
+			if(Buff[i]==OEM4SYNC1 && Buff[i+1]==OEM4SYNC2 && Buff[i+2]==OEM4SYNC3)
+			{
+				break;
+			}
+		}
+
+		if(i+OEM4HLEN>=d)     
+			break;
+
+		for(j=0;j<OEM4HLEN;j++) 
+			TempBuff[j]=Buff[i+j];
+
+		len=U2(TempBuff+8)+OEM4HLEN;  
+		
+		if ((len+4+i)>d || len>MAXRAWLEN)  //消息不完整，跳出 
+			break;
+
+		for(j=OEM4HLEN;j<len+4;j++)  //Get MSG Body
+			TempBuff[j]=Buff[i+j];	
+
+		msgID=U2(TempBuff+4);
+
+		/* check crc32 */
+		if (crc32(TempBuff,len)!=U4(TempBuff+len))
+		{
+			i+=len+4;
+			continue;
+		}
+		msgType =(U1(TempBuff+6)>>4)&0x03;
+		week=U2(TempBuff+14);
+		tow =U4(TempBuff+16)*0.001;
+
+		if (msgType!=0)   
+			continue; /* message type: 0=binary,1=ascii */
+
+		switch (msgID)
+		{
+		case ID_RANGE         :
+			CopyArray(3, pos, obs->Pos);
+			memset(obs, 0, sizeof(EPOCHOBSDATA));
+			CopyArray(3, obs->Pos, pos);
+			obs->Time.Week = week;
+			obs->Time.SecOfWeek = tow;
+			val=decode_rangeb_oem6(TempBuff, obs);
+			break;
+		case 1696 :        decode_bdsephem(TempBuff, beph);    break; //liuwk20211206
+		case ID_GPSEPHEM : decode_gpsephem(TempBuff, geph);    break;
+		case ID_IONUTC   : 
+			decode_ionutc(TempBuff, &IonPara);  break;
+		case ID_BESTPOS  : decode_psrpos(TempBuff, obs->Pos);  break;
+		default :         break;
+		}
+		i+=len+4;
+		
+		if(val==1)  //解码成功
+			break;
+	};
+
+	//---------------解码后，缓存的处理-------------------//
+	for(j=0;j<d-i;j++)    
+		Buff[j]=Buff[i+j];
+
+	d=j; //解码后，缓存中剩余的尚未解码的字节数
+	//---------------解码后，缓存的处理-------------------//
+	return val;
+}
+
+
+
+/****************************************************************************
+  decode_rangeb
+  
+  目的：解码观测数据，适用于OEM6
+
+  参数:
+  buff    数据缓冲区
+  obs     存储观测数据的结构体对象 
+****************************************************************************/
+int decode_rangeb_oem6(unsigned char *buff, EPOCHOBSDATA* obs)
+{
+	double wl;
+	unsigned int track;
+	int i, j, m, n, nobs, prn, sat;
+	unsigned char Freq, plockf, parityf, clockf, sigtype, halfc;
+	GNSSSys sys;
+	unsigned char *p=buff+OEM4HLEN;
+
+	nobs=U4(p);
+	n=0;
+	for (i=0,p+=4;i<nobs;i++,p+=44) //p+=4
+	{
+		track=U4(p+40);
+		switch((track>>16)&7)
+		{
+			case 0: sys=GPS;     break;
+			case 4: sys=BDS;     break;
+			default:  sys= UNKS; break;
+		}
+
+		sat=U2(p);
+		if(sys==GPS || sys==BDS)  
+			prn=sat;
+		else
+			continue;
+
+		plockf  = (track>>10)&1;
+		clockf  = (track>>12)&1;
+		parityf = (track>>11)&1;
+		halfc   = (track>>28)&1;
+		sigtype = (track>>21)&0x1F;
+
+		if(sys==GPS)
+		{
+			switch(sigtype) //本次实习使用的是L1C和L2P(Y)
+			{
+			case 0:  Freq=0; break;   // L1C/A
+			case 9:  Freq=1; break;   // L2P(Y),semi-codeless
+			default: Freq=-1; break;
+			}
+		}
+		if(sys==BDS)
+		{
+			switch(sigtype)  //本次实习使用的是B1I和B3I
+			{
+			case 0: Freq=0; break;   // B1I D1
+			case 2: Freq=1; break;   // B3I D1
+			case 4: Freq=0; break;   // B1I D2
+			case 6: Freq=1; break;   // B3I D2
+			default: Freq=-1; break;
+			}
+		}
+
+		if(Freq==-1 || Freq>=2)  continue;
+
+		m=n;
+		if(Freq!=0)  // 查找L1观测值保存的位置
+		{
+			for(j=0;j<=MAXCHANNUM;j++)
+			{
+				if(obs->SatObs[j].Prn==prn&&obs->SatObs[j].System==sys){
+					m=j;
+					break;
+				}
+			}
+		}
+
+		obs->SatObs[m].Prn=prn;
+		obs->SatObs[m].System=sys;
+		if(sys==GPS) 
+		{
+			if(prn>MAXGPSPRN)  continue;
+			wl=Freq==0? C_Light/FG1_GPS : C_Light/FG2_GPS;
+		}
+		if(sys==BDS){
+			if(prn>MAXBDSPRN)  continue;
+			wl=Freq==0? C_Light/FG1_CPS : C_Light/FG3_CPS;
+		}
+ 
+
+		if(Freq==0){  //第一个频点    //CNR??                                   
+			obs->SatObs[m].c1 =(!clockf)? 0.0 : R8(p+4);
+			obs->SatObs[m].l1 =(!plockf)? 0.0 : -R8(p+16)*wl;  
+			obs->SatObs[m].d1 =R4(p+28)*wl;  //注意单位，已经由周转换为米
+		 
+			n++;
+		}
+		if(Freq==1){  //第二个频点
+			obs->SatObs[m].p2=(!clockf)? 0.0 : R8(p+4);
+			obs->SatObs[m].l2=(!plockf)? 0.0 : -R8(p+16)*wl;  
+		}
+	}
+	obs->SatNum=n;
+	return 1;
+}
