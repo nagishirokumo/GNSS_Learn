@@ -1,7 +1,7 @@
 #include <iostream>
 #include "GNSS_Time_System.h"
 #include "GNSS_Coord_System.h"
-#include "Data_RINEX303.h"
+#include "Data_Rinex.h"
 #include "DATA_Novatel.h"
 #include "sockets.h"
 #include <windows.h>
@@ -25,11 +25,19 @@ int RINEX_Navi_main()
 int RINEX_Obs_main()
 {
     std::ifstream file("../resources/JFNG00CHN_R_20200010000_01D_30S_MO.20o");
-    Rinex_Observation_Head Obs_Head(file);
-    Rinex_Observation_Data Obs_Data(file,&Obs_Head);
-    Rinex_Observation_Epoch_Differential Obs_Epoch_Differential(Obs_Data);
-    Write2TXT(Obs_Data);
-    Write2TXT(Obs_Epoch_Differential);
+    Rinex304_Observation_Head Obs_Head(file);
+    Rinex304_Observation_Data Obs_Data(file, &Obs_Head);
+    return 0;
+}
+
+int RINEX_Obs_Quality_main()
+{
+    std::ifstream file("../resources/E095176A5.25O");
+    Rinex304_Observation_Head Obs_Head(file);
+    Rinex304_Observation_Data Obs_Data(file, &Obs_Head);
+    Rinex_Observation_Completeness_Rate Obs_Completeness_Rate(Obs_Data,0.1);
+    Rinex_Observation_Cycle_Slip_Detection Obs_Cycle_Slip_Detection(Obs_Data,0.1);
+
     return 0;
 }
 
@@ -52,13 +60,14 @@ int main()
 {
     SetConsoleOutputCP(CP_UTF8);
 //    Novatel OEM7
-    Novatel_main();
+//    Novatel_main();
 //    Socket_Test();
 
 
 //    RINEX303
 //    RINEX_Navi_main();
 //    RINEX_Obs_main();
+    RINEX_Obs_Quality_main();
     return 0;
 }
 

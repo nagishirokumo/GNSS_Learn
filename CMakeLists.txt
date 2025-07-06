@@ -14,6 +14,9 @@ file(GLOB INCLUDE_LIST ./include/*.h)
 
 add_executable(POS_NAV_Project ${SRC_LIST}
         ${INCLUDE_LIST}
+        src/Rinex_Observation_Solving.cpp
+        src/Rinex_Navigation_Solving.cpp
+        src/GNSS_Quality_Assessment.cpp
 )
 target_link_libraries(POS_NAV_Project PRIVATE Ws2_32)
 add_custom_command(TARGET POS_NAV_Project POST_BUILD

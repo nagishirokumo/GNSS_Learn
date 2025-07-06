@@ -1,6 +1,10 @@
 #ifndef  _GNSS_TIME_SYSTEM_H_ //防止头文件被重复包含
 #define  _GNSS_TIME_SYSTEM_H_
 
+#include <ctime>
+#include <cmath>
+#include <iostream>
+
 class UTC;
 class MJD;
 
@@ -105,7 +109,14 @@ public:
             :GPS_Week(GPS_Week_)
             ,GPS_Second(GPS_Second_)
     {}
-    GPST(){}
+    GPST(unsigned short year_,char month_,char day_,char hour_,
+         char min_,double sec_);
+
+    GPST()
+    {
+        GPS_Week=0;
+        GPS_Second=0;
+    }
 
     // 减法
     double operator-(const GPST& other) const {
@@ -124,7 +135,11 @@ public:
             :BDS_Week(BDS_Week_)
             ,BDS_Second(BDS_Second_)
     {}
-    BDT(){}
+    BDT()
+    {
+        BDS_Week=0;
+        BDS_Second=0;
+    }
 
     // 减法
     double operator-(const BDT& other) const {
