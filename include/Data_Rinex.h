@@ -21,19 +21,23 @@
 
 #define GPS_GM 3.986005e14
 #define BDS_GM 3.986004418e14
-#define GPS_OMEGAE 7.2921150e-5
+#define GPS_OMEGAE 7.2921151467e-5
 #define BDS_OMEGAE 7.2921150e-5
 #define PI 3.1415926535898
 #define DELTAT_CORR_F -4.442807633e-10
+
 #define IF_GPS_M 2.545727780163160
 #define IF_GPS_N -1.545727780163160
 #define IF_BDS_M 2.843645083932853
 #define IF_BDS_N -1.843645083932853
+
 #define C_LIGHT 299792458.0
 #define FREQ_BDS_B1I 1.561098e9
+#define FREQ_BDS_B2I 1.20714e9
 #define FREQ_BDS_B3I 1.26852e9
 #define FREQ_GPS_L1 1.57542e9
 #define FREQ_GPS_L2 1.22760e9
+
 #define DEG2RAD 3.1415926535898/180
 #define RAD2DEG 180/3.1415926535898
 
@@ -166,6 +170,10 @@ public:
     double Carrier_Phase_Geometry_Free=0;
     double Pseudorange_Geometry_Free=0;
 
+    double Pseudorange1=0;
+    double Carrier_Phase1=0;
+    double Pseudorange2=0;
+    double Carrier_Phase2=0;
 };
 //单历元观测值
 class Rinex304_Single_Epoch_Observation_Data
@@ -261,14 +269,43 @@ public:
     std::map<std::string,std::map<int,double> > MW_Mean;
     std::map<std::string,std::map<int,double> > MW_Sigma;
     std::map<std::string,std::vector<int> > Cycle_Slip_List;
+    std::map<std::string,std::vector<int> > Gross_Error_List;
+
+    //外层key为历元index 内层是prn和钟跳类型
+    std::map<int,std::map<std::string,int> > Receiver_Clock_Slip;
 
     Rinex_Observation_Cycle_Slip_Detection(){}
     Rinex_Observation_Cycle_Slip_Detection(Rinex304_Observation_Data &Observation_Data,
                                            double Freq_Of_Obs);
 };
 bool Linear_Combine_Calc(Rinex304_Single_Satellite_Observation_Data &Sat_Obs,std::string PRN);
+void MW_Cycle_Slip_Detection(Rinex304_Observation_Data &Observation_Data,
+                             Rinex_Observation_Cycle_Slip_Detection &Cycle_Slip_Detection);
+void GF_Cycle_Slip_Detection(Rinex304_Observation_Data &Observation_Data,
+                             Rinex_Observation_Cycle_Slip_Detection &Cycle_Slip_Detection);
+Eigen::VectorXd Poly_Fit(const std::vector<double>& x, const std::vector<double>& y, int degree);
+double Poly_Value(const Eigen::VectorXd& coeffs, double x);
+void Receiver_Clock_Slip_Detection(Rinex304_Observation_Data &Observation_Data,
+                                   Rinex_Observation_Cycle_Slip_Detection &Cycle_Slip_Detection);
+
+class Rinex_Observation_MultiPath_Detection
+{
+public:
+    std::map<std::string,std::map<int,double> > MultiPath_Freq1;
+    std::map<std::string,std::map<int,double> > MultiPath_Freq2;
+    std::map<std::string,std::map<int,double> > MultiPath_Freq1_PrefixSum;
+    std::map<std::string,std::map<int,double> > MultiPath_Freq2_PrefixSum;
+
+    std::map<std::string,std::vector<double> > MultiPath_Freq1_Assessment;
+    std::map<std::string,std::vector<double> > MultiPath_Freq2_Assessment;
 
 
+    Rinex_Observation_MultiPath_Detection(){}
+    Rinex_Observation_MultiPath_Detection(Rinex304_Observation_Data &Observation_Data,
+                                           double Freq_Of_Obs);
+};
+
+//导航电文
 void Rinex_Navigation_Message_Header_Read(std::ifstream& file, Navi_Data_Head& header);
 
 double Read_Double_Data(const std::string& line, int offset,int length);

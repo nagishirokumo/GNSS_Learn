@@ -37,7 +37,7 @@ int RINEX_Obs_Quality_main()
     Rinex304_Observation_Data Obs_Data(file, &Obs_Head);
     Rinex_Observation_Completeness_Rate Obs_Completeness_Rate(Obs_Data,0.1);
     Rinex_Observation_Cycle_Slip_Detection Obs_Cycle_Slip_Detection(Obs_Data,0.1);
-
+    Rinex_Observation_MultiPath_Detection Obs_MultiPath_Detection(Obs_Data,0.1);
     return 0;
 }
 
