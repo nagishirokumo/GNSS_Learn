@@ -317,6 +317,18 @@ Rinex304_Observation_Data::Rinex304_Observation_Data(std::ifstream& file, Rinex3
     }
 }
 
+Rinex304_Observation_File::Rinex304_Observation_File(std::string filepath)
+{
+    std::ifstream file(filepath);
+    Rinex304_Observation_Head Obs_Head(file);
+    Rinex304_Observation_Data Obs_Data(file, &Obs_Head);
+
+    Obs_File_Head=Obs_Head;
+    Obs_File_Data=Obs_Data;
+    return ;
+}
+
+
 
 
 Rinex303_Observation_Head::Rinex303_Observation_Head(std::ifstream& file)

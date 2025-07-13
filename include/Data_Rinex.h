@@ -148,6 +148,7 @@ public:
     //key-系统类型 value-系统观测值类型
     std::map<char,std::vector<std::string>> Sys_Obs_Type;
     Rinex304_Observation_Head(std::ifstream& file);
+    Rinex304_Observation_Head(){}
 };
 //某一卫星的观测值
 class Rinex304_Single_Satellite_Observation_Data
@@ -190,10 +191,41 @@ public:
 class Rinex304_Observation_Data
 {
 public:
-    Rinex304_Observation_Head* pHeader;
+    Rinex304_Observation_Head* pHeader= nullptr;
     std::vector<Rinex304_Single_Epoch_Observation_Data> Rinex_Obs_Data;
     std::map<std::string,std::vector<std::pair<int,int>>> Time_Range;
     Rinex304_Observation_Data(std::ifstream& file, Rinex304_Observation_Head* pHeader_);
+    Rinex304_Observation_Data(){}
+};
+
+//观测值文件
+class Rinex304_Observation_File
+{
+public:
+    Rinex304_Observation_Head Obs_File_Head;
+    Rinex304_Observation_Data Obs_File_Data;
+
+    Rinex304_Observation_File(){};
+    Rinex304_Observation_File(std::string filepath);
+
+    Rinex304_Observation_File(const Rinex304_Observation_File& other)
+    {
+        Obs_File_Head = other.Obs_File_Head;
+        Obs_File_Data = other.Obs_File_Data;
+        Obs_File_Data.pHeader = &Obs_File_Head;
+    }
+
+    Rinex304_Observation_File& operator=(const Rinex304_Observation_File& other)
+    {
+        if (this != &other) {
+            Obs_File_Head = other.Obs_File_Head;
+            Obs_File_Data = other.Obs_File_Data;
+            Obs_File_Data.pHeader = &Obs_File_Head;
+        }
+        return *this;
+    }
+
+
 };
 
 //Rinex303
@@ -268,6 +300,11 @@ class Rinex_Observation_Cycle_Slip_Detection
 public:
     std::map<std::string,std::map<int,double> > MW_Mean;
     std::map<std::string,std::map<int,double> > MW_Sigma;
+
+    std::map<std::string,std::map<int,double> > MW_Diff;
+    std::map<std::string,std::map<int,double> > GF_Carrier_Phase;//载波
+    std::map<std::string,std::map<int,double> > GF_Pseudorange;//伪距
+
     std::map<std::string,std::vector<int> > Cycle_Slip_List;
     std::map<std::string,std::vector<int> > Gross_Error_List;
 
@@ -296,8 +333,8 @@ public:
     std::map<std::string,std::map<int,double> > MultiPath_Freq1_PrefixSum;
     std::map<std::string,std::map<int,double> > MultiPath_Freq2_PrefixSum;
 
-    std::map<std::string,std::vector<double> > MultiPath_Freq1_Assessment;
-    std::map<std::string,std::vector<double> > MultiPath_Freq2_Assessment;
+    std::map<std::string,std::map<int,double> > MultiPath_Freq1_Assessment;
+    std::map<std::string,std::map<int,double> > MultiPath_Freq2_Assessment;
 
 
     Rinex_Observation_MultiPath_Detection(){}
